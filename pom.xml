@@ -25,5 +25,6 @@
   <modules>
     <module>gateway</module>
     <module>thing-lamp</module>
+    <module>thing-thermostat</module>
   </modules>
 </project>

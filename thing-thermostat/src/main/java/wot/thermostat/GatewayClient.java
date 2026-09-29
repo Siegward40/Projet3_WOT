@@ -1,4 +1,4 @@
-package wot.lamp;
+package wot.thermostat;
 
 import java.time.Instant;
 import java.util.Map;
@@ -53,21 +53,21 @@ public class GatewayClient {
         try {
             rest.post().uri("/things")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("id", ThermostaDescription.ID, "name", "Thermosta", "baseUrl", selfUrl,
-                            "model", ThermostaDescription.model()))
+                    .body(Map.of("id", ThermostatDescription.ID, "name", "Thermostat", "baseUrl", selfUrl,
+                            "model", ThermostatDescription.model()))
                     .retrieve()
                     .toBodilessEntity();
             registered = true;
-            log.info("registered with the gateway as {}", ThermostaDescription.ID);
+            log.info("registered with the gateway as {}", ThermostatDescription.ID);
         } catch (HttpClientErrorException.Conflict e) {
             // old registration still there: remove it, the next run registers again
-            rest.delete().uri("/things/{id}", ThermostaDescription.ID).retrieve().toBodilessEntity();
+            rest.delete().uri("/things/{id}", ThermostatDescription.ID).retrieve().toBodilessEntity();
         } catch (RestClientException e) {
             log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
         }
     }
 
-    // sent from a separate thread: the gateway may call the Thermosta back while handling the event
+    // sent from a separate thread: the gateway may call the Thermostat back while handling the event
     public void emit(String type, Map<String, Object> data) {
         String timestamp = Instant.now().toString();
         sender.submit(() -> send(type, data, timestamp));
@@ -80,7 +80,7 @@ public class GatewayClient {
         try {
             rest.post().uri("/events")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("thingId", ThermostaDescription.ID, "type", type, "data", data,
+                    .body(Map.of("thingId", ThermostatDescription.ID, "type", type, "data", data,
                             "timestamp", timestamp))
                     .retrieve()
                     .toBodilessEntity();
@@ -96,7 +96,7 @@ public class GatewayClient {
         sender.shutdown();
         if (registered) {
             try {
-                rest.delete().uri("/things/{id}", ThermostaDescription.ID).retrieve().toBodilessEntity();
+                rest.delete().uri("/things/{id}", ThermostatDescription.ID).retrieve().toBodilessEntity();
             } catch (RestClientException e) {
                 log.warn("could not unregister: {}", e.getMessage());
             }

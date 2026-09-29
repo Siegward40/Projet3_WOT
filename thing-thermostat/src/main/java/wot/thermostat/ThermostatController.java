@@ -1,5 +1,7 @@
-package wot.thermosta;
+package wot.thermostat;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -14,18 +16,22 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** GET /model, GET /properties, GET|PUT /properties/{name}, POST /actions/{name}. */
 @RestController
-public class ThermostaController {
+public class ThermostatController {
 
     private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("on", false));
     private final GatewayClient gateway;
+    private final ArrayList<String> modes = new ArrayList<String>(Arrays.asList(
+    		"off",
+            "heat",
+            "eco"));;
 
-    public ThermostaController(GatewayClient gateway) {
+    public ThermostatController(GatewayClient gateway) {
         this.gateway = gateway;
     }
 
     @GetMapping({"/", "/model"})
     public Map<String, Object> model() {
-        return ThermostaDescription.model();
+        return ThermostatDescription.model();
     }
 
     @GetMapping("/properties")
@@ -47,21 +53,34 @@ public class ThermostaController {
             return error(HttpStatus.NOT_FOUND, "unknown property " + name);
         }
         Object value = body.get("value");
-        if (!(value instanceof Boolean)) {
-            return error(HttpStatus.BAD_REQUEST, "property on expects a boolean {\"value\": true|false}");
+        if ("temperature".equals(name) || "target".equals(name)) {
+            if (!(value instanceof Number)) {
+                return error(HttpStatus.BAD_REQUEST, "property"+name+"expects a numeric value");
+            }
+        }
+        else if ("mode".equals(name)) {
+            if (!modes.contains(value)) {
+                return error(HttpStatus.BAD_REQUEST, "mode must be 'off', 'heat', or 'eco'");
+            }
         }
         set(name, value);
         return ResponseEntity.ok(Map.of("name", name, "value", value));
     }
 
-    // the rules must write the property on, not call toggle
-    @PostMapping("/actions/toggle")
-    public Map<String, Object> toggle() {
-        set("on", !(Boolean) state.get("on"));
-        return Map.of("action", "toggle", "status", "completed", "properties", state);
+    @PostMapping("/actions/setTarget")
+    public ResponseEntity<Map<String, Object>> setTarget(@RequestBody Map<String, Object> body) {
+        Object value = body.get("target");
+        if (!(value instanceof Number)) {
+            return error(HttpStatus.BAD_REQUEST,"action setTarget expects numeric value");
+        }
+        float target = ((Number) value).floatValue();
+        // TODO maybe later : limit target
+        /*if (...) {
+            return error(HttpStatus.BAD_REQUEST, "...");
+        }*/
+        set("target", target);
+        return ResponseEntity.ok(Map.of("action", "setTarget", "status", "completed", "properties", state));
     }
-
-    // TODO: property brightness (0..100) and action setBrightness
 
     private void set(String name, Object value) {
         state.put(name, value);

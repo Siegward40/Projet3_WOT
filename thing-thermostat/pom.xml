@@ -10,7 +10,7 @@
     <version>1.0.0</version>
   </parent>
 
-  <artifactId>thing-thermosta</artifactId>
+  <artifactId>thing-thermostat</artifactId>
 
   <dependencies>
     <dependency>
@@ -20,7 +20,7 @@
   </dependencies>
 
   <build>
-    <finalName>thing-thermosta</finalName>
+    <finalName>thing-thermostat</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
