@@ -22,14 +22,15 @@ public final class LampDescription {
         ));
         model.put("actions", Map.of(
                 "toggle", Map.of("description", "switches the lamp on or off"),
-                "setBrightness", Map.of("description", "adjust the lamp's brightness")
+                "setBrightness", Map.of("description", "adjusts the lamp's brightness")
         ));
         model.put("events", Map.of(
                 "propertyChanged", Map.of("description", "a property changed: {\"property\": ..., \"value\": ...}")));
         model.put("links", Map.of(
                 "self", "/model",
                 "properties", "/properties",
-                "toggle", "/actions/toggle"));
+                "toggle", "/actions/toggle",
+                "setBrightness", "/actions/setBrightness"));
         return model;
     }
 }
