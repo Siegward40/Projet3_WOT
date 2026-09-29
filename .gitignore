@@ -1,5 +1,21 @@
+# Maven
 target/
+
+# Logs
 logs/
+*.log
+
+# IntelliJ IDEA
 .idea/
 *.iml
+
+# VS Code
 .vscode/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# Compiled Java files
+*.class
