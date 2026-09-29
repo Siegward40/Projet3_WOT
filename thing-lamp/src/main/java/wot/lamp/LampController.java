@@ -16,7 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class LampController {
 
-    private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("on", false));
+	private final Map<String, Object> state = new ConcurrentHashMap<>(
+        Map.of(
+            "on", false,
+            "brightness", 100
+        )
+    );
     private final GatewayClient gateway;
 
     public LampController(GatewayClient gateway) {
@@ -47,8 +52,20 @@ public class LampController {
             return error(HttpStatus.NOT_FOUND, "unknown property " + name);
         }
         Object value = body.get("value");
-        if (!(value instanceof Boolean)) {
-            return error(HttpStatus.BAD_REQUEST, "property on expects a boolean {\"value\": true|false}");
+        if ("on".equals(name)) {
+            if (!(value instanceof Boolean)) {
+                return error(HttpStatus.BAD_REQUEST, "property on expects a boolean {\"value\": true|false}");
+            }
+        }
+        else if ("brightness".equals(name)) {
+            if (!(value instanceof Number)) {
+                return error(HttpStatus.BAD_REQUEST, "property brightness expects a number between 0 and 100");
+            }
+            int brightness = ((Number) value).intValue();
+            if (brightness < 0 || brightness > 100) {
+                return error(HttpStatus.BAD_REQUEST, "brightness must be between 0 and 100");
+            }
+            value = brightness;
         }
         set(name, value);
         return ResponseEntity.ok(Map.of("name", name, "value", value));
@@ -60,8 +77,20 @@ public class LampController {
         set("on", !(Boolean) state.get("on"));
         return Map.of("action", "toggle", "status", "completed", "properties", state);
     }
-
-    // TODO: property brightness (0..100) and action setBrightness
+    
+    @PostMapping("/actions/setBrightness")
+    public ResponseEntity<Map<String, Object>> setBrightness(@RequestBody Map<String, Object> body) {
+        Object value = body.get("brightness");
+        if (!(value instanceof Number)) {
+            return error(HttpStatus.BAD_REQUEST,"action setBrightness expects {\"brightness\": 0..100}");
+        }
+        int brightness = ((Number) value).intValue();
+        if (brightness < 0 || brightness > 100) {
+            return error(HttpStatus.BAD_REQUEST, "brightness must be between 0 and 100");
+        }
+        set("brightness", brightness);
+        return ResponseEntity.ok(Map.of("action", "setBrightness", "status", "completed", "properties", state));
+    }
 
     private void set(String name, Object value) {
         state.put(name, value);
