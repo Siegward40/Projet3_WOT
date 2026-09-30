@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 8081
 
 thing:
   base-url: http://localhost:${server.port}
