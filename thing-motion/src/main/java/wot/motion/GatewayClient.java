@@ -46,19 +46,22 @@ public class GatewayClient {
 
     @Scheduled(initialDelay = 1000, fixedDelay = 5000)
     public void registerIfNeeded() {
-        if (registered) {
-            return;
+        if (!registered) {
+            try {
+                rest.post().uri("/things").contentType(MediaType.APPLICATION_JSON).body(Map.of("id", MotionDescription.ID, "name", "Motion Sensor", "baseUrl", selfUrl, "model", MotionDescription.model())).retrieve().toBodilessEntity();
+                registered = true;
+                log.info("registered with the gateway as {}", MotionDescription.ID);
+            } catch (HttpClientErrorException.Conflict e) {
+                // old registration still there: remove it, the next run registers again
+                rest.delete().uri("/things/{id}", MotionDescription.ID).retrieve().toBodilessEntity();
+            } catch (RestClientException e) {
+                log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
+            }
         }
-        try {
-            rest.post().uri("/things").contentType(MediaType.APPLICATION_JSON).body(Map.of("id", MotionDescription.ID, "name", "Motion Sensor", "baseUrl", selfUrl, "model", MotionDescription.model())).retrieve().toBodilessEntity();
-            registered = true;
-            log.info("registered with the gateway as {}", MotionDescription.ID);
-        } catch (HttpClientErrorException.Conflict e) {
-            // old registration still there: remove it, the next run registers again
-            rest.delete().uri("/things/{id}", MotionDescription.ID).retrieve().toBodilessEntity();
-        } catch (RestClientException e) {
-            log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
-        }
+        rest.post()
+            .uri(selfUrl + "/actions/simulateMotion")
+            .retrieve()
+            .toBodilessEntity();
     }
 
 

@@ -3,6 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 
+mvn compile
 mvn -q -DskipTests package
 mkdir -p logs
 
