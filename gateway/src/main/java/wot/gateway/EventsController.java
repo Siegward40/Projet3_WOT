@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /** POST /events (from the things) and GET /events/stream (to the browsers). */
 @RestController
 @RequestMapping("/events")
@@ -22,6 +25,7 @@ public class EventsController {
 
     private final EventHub hub;
     private final ThingsController things;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public EventsController(EventHub hub, ThingsController things) {
         this.hub = hub;
@@ -40,7 +44,21 @@ public class EventsController {
         }
         things.find(event.thingId()); // 404 if unknown
         hub.broadcast("thing", event);
-        // TODO: rules R1, R2 (R3, R4: bonus)
+        if("motion".equals(event.type())){
+            ResponseEntity<String> respEnt = things.readProperty("thermostat", "temperature");
+            float temp;
+            try {
+                temp = MAPPER.readTree(respEnt.getBody()).get("value").floatValue();
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Réponse thermostat invalide", e);
+            }
+            things.writeProperty("lamp", "on", "{\"value\":true}");
+            if(temp < 19.0){
+                things.writeProperty("thermostat", "target", "{\"value\":19.0}");
+                things.writeProperty("thermostat", "mode", "{\"value\":\"heat\"}");
+            }
+        }
+        // TODO: rules R3, R4
         return ResponseEntity.accepted().build();
     }
 }
