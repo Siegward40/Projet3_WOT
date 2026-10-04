@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -47,25 +48,25 @@ public class GatewayClient {
     // retried every 5 s until the gateway accepts the registration
     @Scheduled(initialDelay = 1000, fixedDelay = 5000)
     public void registerIfNeeded() {
-        if (registered) {
-            return;
-        }
-        try {
-            rest.post().uri("/things")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("id", LampDescription.ID, "name", "Lamp", "baseUrl", selfUrl,
-                            "model", LampDescription.model()))
-                    .retrieve()
-                    .toBodilessEntity();
-            registered = true;
-            log.info("registered with the gateway as {}", LampDescription.ID);
-        } catch (HttpClientErrorException.Conflict e) {
-            // old registration still there: remove it, the next run registers again
-            rest.delete().uri("/things/{id}", LampDescription.ID).retrieve().toBodilessEntity();
-        } catch (RestClientException e) {
-            log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
+        if (!registered) {
+            try {
+                rest.post().uri("/things")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("id", LampDescription.ID, "name", "Lamp", "baseUrl", selfUrl,
+                                "model", LampDescription.model()))
+                        .retrieve()
+                        .toBodilessEntity();
+                registered = true;
+                log.info("registered with the gateway as {}", LampDescription.ID);
+            } catch (HttpClientErrorException.Conflict e) {
+                // old registration still there: remove it, the next run registers again
+                rest.delete().uri("/things/{id}", LampDescription.ID).retrieve().toBodilessEntity();
+            } catch (RestClientException e) {
+                log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
+            }
         }
     }
+    
 
     // sent from a separate thread: the gateway may call the lamp back while handling the event
     public void emit(String type, Map<String, Object> data) {

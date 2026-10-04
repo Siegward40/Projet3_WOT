@@ -7,3 +7,7 @@ thing:
 gateway:
   url: http://localhost:8080
   token: operator-secret
+
+simulation:
+  initial-temp: 17.5
+  step: 0.2

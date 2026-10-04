@@ -47,23 +47,22 @@ public class GatewayClient {
     // retried every 5 s until the gateway accepts the registration
     @Scheduled(initialDelay = 1000, fixedDelay = 5000)
     public void registerIfNeeded() {
-        if (registered) {
-            return;
-        }
-        try {
-            rest.post().uri("/things")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("id", ThermostatDescription.ID, "name", "Thermostat", "baseUrl", selfUrl,
-                            "model", ThermostatDescription.model()))
-                    .retrieve()
-                    .toBodilessEntity();
-            registered = true;
-            log.info("registered with the gateway as {}", ThermostatDescription.ID);
-        } catch (HttpClientErrorException.Conflict e) {
-            // old registration still there: remove it, the next run registers again
-            rest.delete().uri("/things/{id}", ThermostatDescription.ID).retrieve().toBodilessEntity();
-        } catch (RestClientException e) {
-            log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
+        if (!registered) {
+            try {
+                rest.post().uri("/things")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("id", ThermostatDescription.ID, "name", "Thermostat", "baseUrl", selfUrl,
+                                "model", ThermostatDescription.model()))
+                        .retrieve()
+                        .toBodilessEntity();
+                registered = true;
+                log.info("registered with the gateway as {}", ThermostatDescription.ID);
+            } catch (HttpClientErrorException.Conflict e) {
+                // old registration still there: remove it, the next run registers again
+                rest.delete().uri("/things/{id}", ThermostatDescription.ID).retrieve().toBodilessEntity();
+            } catch (RestClientException e) {
+                log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
+            }
         }
     }
 

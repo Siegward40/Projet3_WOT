@@ -5,8 +5,10 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +26,9 @@ public class ThermostatController {
     		"off",
             "heat",
             "eco"));;
+    
+    @Value("${simulation.step:0.2}")
+    private double step;
 
     public ThermostatController(GatewayClient gateway) {
         this.gateway = gateway;
@@ -89,5 +94,26 @@ public class ThermostatController {
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(Map.of("status", status.value(), "error", message));
+    }
+
+    @Scheduled(fixedDelay = 1000)
+    public void addaptHeat() {
+        String mode = (String) state.get("mode");
+        if ("off".equals(mode)) return; // TODO offDrift de l'enonce
+
+        double temp = ((Number) state.get("temperature")).doubleValue();
+        double target = ((Number) state.get("target")).doubleValue();
+        boolean reached = false;
+
+        if (temp < target) {
+            temp = Math.round((temp+step)*100.0) / 100.0;
+        } 
+        if (temp >= target) {
+            reached = true;
+        }
+        set("temperature", temp);
+        if (reached) {
+            gateway.emit("targetReached", Map.of("target", target, "temperature", temp));
+        }
     }
 }
