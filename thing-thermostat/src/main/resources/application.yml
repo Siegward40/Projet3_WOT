@@ -10,4 +10,6 @@ gateway:
 
 simulation:
   initial-temp: 17.5
+  min-temp: 15.0
   step: 0.2
+  negative-step: -0.05
