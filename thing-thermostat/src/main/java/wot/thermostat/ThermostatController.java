@@ -117,7 +117,7 @@ public class ThermostatController {
              if (temp < target) {
                  temp = Math.round((temp+step)*100.0) / 100.0;
              } 
-             if (temp >= target) {
+             if (temp >= target && mode != "eco") {
                  reached = true;
              }
         }

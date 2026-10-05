@@ -72,24 +72,28 @@ public class ThingsController {
 
 
     @GetMapping("/{id}/properties")
-    public ResponseEntity<String> properties(@PathVariable String id) {
-        return call(id, HttpMethod.GET, "/properties", null);
+    public ResponseEntity<String> properties(@PathVariable String id,
+    		@RequestParam(defaultValue = "false") boolean from_rule) {
+        return call(id, HttpMethod.GET, "/properties", null, from_rule);
     }
 
     @GetMapping("/{id}/properties/{name}")
-    public ResponseEntity<String> readProperty(@PathVariable String id, @PathVariable String name) {
-        return call(id, HttpMethod.GET, "/properties/" + name, null);
+    public ResponseEntity<String> readProperty(@PathVariable String id, @PathVariable String name,
+    		@RequestParam(defaultValue = "false") boolean from_rule) {
+        return call(id, HttpMethod.GET, "/properties/" + name, null, from_rule);
     }
 
     @PutMapping("/{id}/properties/{name}")
     public ResponseEntity<String> writeProperty(@PathVariable String id, @PathVariable String name,
-                                                @RequestBody(required = false) String body) {
-        return call(id, HttpMethod.PUT, "/properties/" + name, body);
+                                                @RequestBody(required = false) String body,
+                                        		@RequestParam(defaultValue = "false") boolean from_rule) {
+        return call(id, HttpMethod.PUT, "/properties/" + name, body, from_rule);
     }
     @PostMapping("/{id}/actions/{name}")
     public ResponseEntity<String> invokeAction(@PathVariable String id, @PathVariable String name,
-                                               @RequestBody(required = false) String body) {
-        return call(id, HttpMethod.POST, "/actions/" + name, body);
+                                               @RequestBody(required = false) String body,
+                                       		@RequestParam(defaultValue = "false") boolean from_rule) {
+        return call(id, HttpMethod.POST, "/actions/" + name, body, from_rule);
     }
 
     // TODO (R4, bonus): POST /things/{id}/automation/resume
@@ -98,13 +102,15 @@ public class ThingsController {
      * Forwards the request to the thing and returns its answer unchanged (status code and JSON body),
      * so that the thing's 200/400/404 reach the client. If the thing cannot be reached: 502.
      */
-    private ResponseEntity<String> call(String id, HttpMethod method, String path, String body) {
+    private ResponseEntity<String> call(String id, HttpMethod method, String path, String body, boolean from_rule) {
         Thing thing = find(id);
         try {
             RestClient.RequestBodySpec request = http.method(method).uri(thing.baseUrl() + path);
             if (body != null && !body.isBlank()) {
                 request.contentType(MediaType.APPLICATION_JSON).body(body);
             }
+            // trigger R4 except for requests sent by rules
+            if(!from_rule) EventsController.manualOverride();
             return request.exchange((req, res) -> ResponseEntity
                     .status(res.getStatusCode())
                     .contentType(MediaType.APPLICATION_JSON)

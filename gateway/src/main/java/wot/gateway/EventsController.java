@@ -37,6 +37,14 @@ public class EventsController {
     private static final Logger log = LoggerFactory.getLogger(EventsController.class);
 
     private volatile boolean lampOnByR1 = false;
+    
+    // for R4
+    private static boolean block_rules = false;
+    private static Instant downtime = null;
+    public static void manualOverride() {
+    	block_rules = true;
+    	downtime = Instant.now();
+    }
 
     public EventsController(EventHub hub, ThingsController things) {
         this.hub = hub;
@@ -56,31 +64,30 @@ public class EventsController {
         things.find(event.thingId()); // 404 if unknown
         hub.broadcast("thing", event);
         // R1 and R2
-        if("motion".equals(event.type())){
-            ResponseEntity<String> respEnt = things.readProperty("thermostat", "temperature");
+        if("motion".equals(event.type()) && !block_rules){
+            ResponseEntity<String> respEnt = things.readProperty("thermostat", "temperature", true);
             float temp;
             try {
                 temp = MAPPER.readTree(respEnt.getBody()).get("value").floatValue();
             } catch (JsonProcessingException e) {
                 throw new IllegalStateException("Réponse thermostat invalide", e);
             }
-            things.writeProperty("lamp", "on", "{\"value\":true}");
+            things.writeProperty("lamp", "on", "{\"value\":true}", true);
             lampOnByR1 = true;
             if(temp < 19.0){
-                things.writeProperty("thermostat", "target", "{\"value\":19.0}");
-                things.writeProperty("thermostat", "mode", "{\"value\":\"heat\"}");
+                things.writeProperty("thermostat", "target", "{\"value\":19.0}", true);
+                things.writeProperty("thermostat", "mode", "{\"value\":\"heat\"}", true);
             }
         }
         // R2 - end
-        if("targetReached".equals(event.type())){
-            things.writeProperty("thermostat", "mode", "{\"value\":\"off\"}");
+        if("targetReached".equals(event.type()) && !block_rules){
+            things.writeProperty("thermostat", "mode", "{\"value\":\"off\"}", true);
         }
-        // TODO: rules R3, R4
         return ResponseEntity.accepted().build();
     }
 
     private Instant readLastMotion() throws JsonProcessingException {
-        String body = things.readProperty("motion", "lastMotion").getBody();
+        String body = things.readProperty("motion", "lastMotion", true).getBody();
         JsonNode v = MAPPER.readTree(body).get("value");
         return (v == null || v.isNull()) ? null : Instant.parse(v.asText());
     }
@@ -100,20 +107,21 @@ public class EventsController {
             Instant lastMotion = readLastMotion();
             // au bout de T1, on eteint la lampe si pas de motion depuis
             if (lastMotion != null
+            		&& !block_rules
                     && Duration.between(lastMotion, Instant.now()).toMillis() >= t1Ms) {
-                things.writeProperty("lamp", "on", "{\"value\":false}");
+                things.writeProperty("lamp", "on", "{\"value\":false}", true);
                 lampOnByR1 = false;
             }
             // au bout de T3, on passe en mode eco et target 17 si pas de motion depuis
             if (lastMotion != null
+            		&& !block_rules
                     && Duration.between(lastMotion, Instant.now()).toMillis() >= t3Ms) {
-                things.writeProperty("thermostat", "mode", "{\"value\":\"eco\"}");
-                things.writeProperty("thermostat", "target", "{\"value\":17.0}");
+                things.writeProperty("thermostat", "mode", "{\"value\":\"eco\"}", true);
+                things.writeProperty("thermostat", "target", "{\"value\":17.0}", true);
             }
             // au bout de T4
-            if (lastMotion != null
-                    && Duration.between(lastMotion, Instant.now()).toMillis() >= t4Ms) {
-                        // TODO : implémenter logique T4
+            if (block_rules && Duration.between(downtime, Instant.now()).toMillis() >= t4Ms) {
+            	block_rules = false;
             }
         } catch (Exception e) {
             log.warn("R1 check failed: {}", e.getMessage());

@@ -13,5 +13,5 @@ gateway:
 
 rules:
   t1-ms: 10000
-  t3-ms: 30000
+  t3-ms: 15000
   t4-ms: 60000
