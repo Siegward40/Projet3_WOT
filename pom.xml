@@ -27,5 +27,6 @@
     <module>thing-lamp</module>
     <module>thing-thermostat</module>
     <module>thing-motion</module>
+    <module>thing-meter-circuit-breaker</module>
   </modules>
 </project>

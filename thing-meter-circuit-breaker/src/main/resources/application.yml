@@ -1,0 +1,15 @@
+server:
+  port: 8084
+
+thing:
+  base-url: http://localhost:${server.port}
+
+gateway:
+  url: http://localhost:8080
+  token: operator-secret
+
+power:
+  motion: 0.5
+  lamp: 1
+  eco-mode: 3
+  heat-mode: 5
