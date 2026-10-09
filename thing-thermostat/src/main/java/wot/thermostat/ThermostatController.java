@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ThermostatController {
 
-    private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("mode", "off", "temperature", 17.5, "target", 19.0));
+    private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("mode", "off", "temperature", 17.5, "target", 19.0, "outdoorTemperature",15.0));
     private final GatewayClient gateway;
     private final ArrayList<String> modes = new ArrayList<String>(Arrays.asList(
     		"off",
@@ -88,10 +88,6 @@ public class ThermostatController {
             return error(HttpStatus.BAD_REQUEST,"action setTarget expects {\"value\": number}");
         }
         float target = ((Number) value).floatValue();
-        // TODO maybe later : limit target
-        /*if (...) {
-            return error(HttpStatus.BAD_REQUEST, "...");
-        }*/
         set("target", target);
         return ResponseEntity.ok(Map.of("action", "setTarget", "status", "completed", "properties", state));
     }
@@ -110,24 +106,26 @@ public class ThermostatController {
         String mode = (String) state.get("mode");
         double temp = ((Number) state.get("temperature")).doubleValue();
    	    double target = ((Number) state.get("target")).doubleValue();
-        boolean reached = false;
         
         if ("off".equals(mode)) {
         	if(temp == min_temp) return;
         	temp = Math.max(min_temp, Math.round((temp+negative_step)*100.0) / 100.0);
+        } else if ("eco".equals(mode)){
+            if (temp < target) {
+                temp = Math.round((temp+step)*100.0) / 100.0;
+            } 
+            if (temp >= target) {
+        	    temp = Math.max(min_temp, Math.round((temp+negative_step)*100.0) / 100.0);
+            }
         }
         else {
-             if (temp < target) {
-                 temp = Math.round((temp+step)*100.0) / 100.0;
-             } 
-             if (temp >= target) {
-                 reached = true;
-             }
+            if (temp < target) {
+                temp = Math.round((temp+step)*100.0) / 100.0;
+            } 
+            if (temp >= target) {
+               gateway.emit("targetReached", Map.of("target", target, "temperature", temp));
+            }
         }
-       
         set("temperature", temp);
-        if (reached) {
-            gateway.emit("targetReached", Map.of("target", target, "temperature", temp));
-        }
     }
 }
