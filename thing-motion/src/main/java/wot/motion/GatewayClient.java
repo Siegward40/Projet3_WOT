@@ -8,12 +8,9 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -32,12 +29,10 @@ public class GatewayClient {
     private final String selfUrl;
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private volatile boolean registered;
-    private final TaskScheduler scheduler;
 
     public GatewayClient(@Value("${gateway.url}") String gatewayUrl,
                          @Value("${gateway.token}") String token,
-                         @Value("${thing.base-url}") String selfUrl,
-                        TaskScheduler scheduler) {
+                         @Value("${thing.base-url}") String selfUrl) {
         SimpleClientHttpRequestFactory timeouts = new SimpleClientHttpRequestFactory();
         timeouts.setConnectTimeout(2000);
         timeouts.setReadTimeout(2000);
@@ -47,7 +42,6 @@ public class GatewayClient {
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .build();
         this.selfUrl = selfUrl;
-        this.scheduler=scheduler;
     }
 
     @Scheduled(initialDelay = 1000, fixedDelay = 5000)
@@ -63,20 +57,6 @@ public class GatewayClient {
             } catch (RestClientException e) {
                 log.warn("gateway not reachable yet ({}), retrying in 5 s", e.getMessage());
             }
-        }
-    }
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void scheduleInitialMotion() {
-        scheduler.schedule(this::simulateMotion, Instant.now().plusSeconds(10));
-    }
-
-    private void simulateMotion() {
-        try {
-            rest.post().uri(selfUrl + "/actions/simulateMotion")
-                .retrieve().toBodilessEntity();
-        } catch (RestClientException e) {
-            log.warn("simulateMotion failed: {}", e.getMessage());
         }
     }
 

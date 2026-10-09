@@ -19,7 +19,8 @@ public final class ThermostatDescription {
         model.put("properties", Map.of(
                 "temperature", Map.of("type", "float", "description", "temperature detected by the thermostat in °C"),
                 "target", Map.of("type", "float", "description", "target temperature in °C"),
-                "mode", Map.of("type", "string", "description", "heating consumption mode ∈ {off, heat, eco}")
+                "mode", Map.of("type", "string", "description", "heating consumption mode ∈ {off, heat, eco}"),
+                "outdoorTemperature", Map.of("type", "float", "readOnly", true, "description", "Outdoor temperature")
         ));
         model.put("actions", Map.of(
                 "setTarget", Map.of("description", "changes the thermostat's target temperature in °C")
