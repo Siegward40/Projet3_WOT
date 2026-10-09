@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ThermostatController {
 
-    private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("mode", "off", "temperature", 17.5, "target", 19.0));
+    private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("mode", "off", "temperature", 17.5, "target", 19.0, "outdoorTemperature",15.0));
     private final GatewayClient gateway;
     private final ArrayList<String> modes = new ArrayList<String>(Arrays.asList(
     		"off",

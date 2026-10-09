@@ -73,9 +73,9 @@
     const $ = id => document.getElementById(id);
     const token = () => $('token').value.trim();
 
-    const READ_ONLY = new Set(['temperature', 'lastMotion', 'energyConsumed', 'instConsumption']);
+    const READ_ONLY = new Set(['temperature', 'outdoorTemperature', 'lastMotion', 'energyConsumed', 'instConsumption']);
     const ENUMS = { mode: ['off', 'heat', 'eco'] };
-    const UNITS = { temperature: ' °C', target: ' °C', brightness: ' %', energyConsumed: ' kWs', instConsumption: ' kW' };
+    const UNITS = { temperature: ' °C', outdoorTemperature: ' °C', target: ' °C', brightness: ' %', energyConsumed: ' kWs', instConsumption: ' kW' };
     const DECIMALS = { energyConsumed: 2, instConsumption: 2 };
     // boolean property driven by an action (shown as a toggle switch instead of a PUT checkbox)
     const SWITCH_ACTIONS = { live: 'toggle' };
