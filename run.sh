@@ -19,7 +19,7 @@ start gateway/target/gateway.jar gateway
 start thing-lamp/target/thing-lamp.jar lamp
 start thing-motion/target/thing-motion.jar motion
 start thing-thermostat/target/thing-thermostat.jar thermostat
-# TODO: thermostat, motion sensor
+start thing-meter-circuit-breaker/target/thing-meter-circuit-breaker.jar meter-circuit-breaker
 
 echo "dashboard: http://localhost:8080/  (token: operator-secret) - Ctrl+C to stop"
 wait

@@ -7,7 +7,7 @@
   <style>
     :root { --bg:#fff; --fg:#1d1d1f; --muted:#6b7280; --card:#f6f7f9; --border:#d9dce1; --accent:#2563eb; --ok:#16a34a; --ko:#dc2626; }
 
-    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 70rem; background: var(--bg); color: var(--fg); }
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 80rem; background: var(--bg); color: var(--fg); }
     input, select, button { font: inherit; }
     .bar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
     .bar input[type=text], .bar input[type=password] { width: 13rem; }
@@ -28,6 +28,19 @@
     .row .val { font-variant-numeric: tabular-nums; text-align: right; }
     .row input[type=number] { width: 5.5rem; }
     .row input[type=range] { width: 8rem; }
+
+    /* toggle switch (enhanced checkbox) */
+    .switch-wrap { display: inline-flex; align-items: center; gap: .5rem; }
+    .switch-wrap .state { font-size: .85rem; color: var(--muted); min-width: 4.5rem; }
+    .row label.switch { position: relative; display: inline-block; width: 2.9rem; height: 1.5rem; flex: none; }
+    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+    .switch .slider { position: absolute; inset: 0; background: var(--ko); border-radius: 1rem; transition: background .2s; }
+    .switch .slider::before { content: ''; position: absolute; width: 1.1rem; height: 1.1rem; left: .2rem; top: .2rem; background: #fff; border-radius: 50%; transition: transform .2s; }
+    .switch input:checked + .slider { background: var(--ok); }
+    .switch input:checked + .slider::before { transform: translateX(1.4rem); }
+    .switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .switch input:disabled { cursor: wait; }
+    .switch input:disabled + .slider { opacity: .55; }
     .action { display: flex; gap: .4rem; align-items: center; padding: .25rem 0; }
     .action input { width: 5.5rem; }
     .badge { display: none; margin-top: .6rem; padding: .2rem .5rem; border-radius: .4rem; background: var(--accent); color: #fff; font-size: .85rem; }
@@ -53,16 +66,23 @@
 <div id="things"><p class="foot">No thing registered.</p></div>
 
 <h2>Live events (GET /events/stream)</h2>
-<p><label><input type="checkbox" id="hide-ticks" checked> hide thermostat temperature updates (one per second)</label></p>
+<p><label><input type="checkbox" id="hide-ticks" checked> hide periodic measurement updates (thermostat temperature, meter consumption)</label></p>
 <pre id="events"></pre>
 
   <script>
     const $ = id => document.getElementById(id);
     const token = () => $('token').value.trim();
 
-    const READ_ONLY = new Set(['temperature', 'lastMotion']);
+    const READ_ONLY = new Set(['temperature', 'lastMotion', 'energyConsumed', 'instConsumption']);
     const ENUMS = { mode: ['off', 'heat', 'eco'] };
-    const UNITS = { temperature: ' °C', target: ' °C', brightness: ' %' };
+    const UNITS = { temperature: ' °C', target: ' °C', brightness: ' %', energyConsumed: ' kWs', instConsumption: ' kW' };
+    const DECIMALS = { energyConsumed: 2, instConsumption: 2 };
+    // boolean property driven by an action (shown as a toggle switch instead of a PUT checkbox)
+    const SWITCH_ACTIONS = { live: 'toggle' };
+    // display order of the properties (the REST model is an unordered map); unknown ones keep their order, after these
+    const PROPERTY_ORDER = ['live', 'instConsumption', 'energyConsumed'];
+    // periodic measurements, hidden from the event log when the checkbox is ticked
+    const TICKS = { thermostat: ['temperature'], 'meter-circuit-breaker': ['instConsumption', 'energyConsumed'] };
     const ACTION_INPUTS = {
       setTarget:     { name: 'target',     min: 5, max: 30,  step: 0.5, value: 19 },
       setBrightness: { name: 'brightness', min: 0, max: 100, step: 1,   value: 100 },
@@ -133,21 +153,29 @@
         el('h3', {}, thing.name || thing.id, el('small', {}, thing.id)),
         el('div', { className: 'desc' }, model.description || ''));
 
+      // resolves to true on success, false on error (the message is displayed in the card)
       async function run(promise) {
         msg.textContent = '';
-        try { await promise; } catch (e) { msg.textContent = e.message; }
+        try { await promise; return true; } catch (e) { msg.textContent = e.message; return false; }
       }
 
+      const modelActions = model.actions || {};
+      const rank = n => { const i = PROPERTY_ORDER.indexOf(n); return i < 0 ? PROPERTY_ORDER.length : i; };
+      const props = Object.entries(model.properties || {}).sort((a, b) => rank(a[0]) - rank(b[0]));
+
       root.append(el('h4', {}, 'Properties'));
-      for (const [name, def] of Object.entries(model.properties || {})) {
-        const w = propertyWidget(thing.id, name, def, run);
+      for (const [name, def] of props) {
+        const w = propertyWidget(thing.id, name, def, run, modelActions);
         widgets[name] = w;
         root.append(el('div', { className: 'row', title: def.description || '' },
           el('label', {}, name), w.node));
       }
 
-      // actions
-      const actions = Object.keys(model.actions || {});
+      // actions (those already handled by a toggle switch get no extra button)
+      const switched = new Set(Object.entries(SWITCH_ACTIONS)
+        .filter(([prop, act]) => (model.properties || {})[prop] && modelActions[act])
+        .map(([, act]) => act));
+      const actions = Object.keys(modelActions).filter(a => !switched.has(a));
       if (actions.length) root.append(el('h4', {}, 'Actions'));
       for (const name of actions) {
         const spec = ACTION_INPUTS[name];
@@ -189,11 +217,35 @@
     }
 
     // a widget = { node, set(value) } ; set() never overwrites a field the user is typing in
-    function propertyWidget(thingId, name, def, run) {
+    function propertyWidget(thingId, name, def, run, actions = {}) {
       const write = value => run(api('PUT',
         '/things/' + encodeURIComponent(thingId) + '/properties/' + encodeURIComponent(name), { value }));
       const unit = UNITS[name] || '';
       const readOnly = def.readOnly === true || READ_ONLY.has(name);
+
+      // toggle switch bound to an action (e.g. circuit breaker: live <-> POST /actions/toggle)
+      const switchAction = SWITCH_ACTIONS[name];
+      if (def.type === 'boolean' && switchAction && actions[switchAction]) {
+        const box = el('input', { type: 'checkbox', title: switchAction });
+        const state = el('span', { className: 'state' }, '-');
+        const show = v => {
+          box.checked = v === true;
+          state.textContent = v === true ? 'power on' : v === false ? 'power cut' : '-';
+        };
+        box.onchange = async () => {
+          const wanted = box.checked;
+          box.disabled = true;
+          const ok = await run(api('POST',
+            '/things/' + encodeURIComponent(thingId) + '/actions/' + encodeURIComponent(switchAction)));
+          box.disabled = false;
+          show(ok ? wanted : !wanted); // on error, go back to the previous state
+        };
+        return {
+          node: el('span', { className: 'switch-wrap' },
+            el('label', { className: 'switch' }, box, el('span', { className: 'slider' })), state),
+          set: show,
+        };
+      }
 
       if (readOnly) {
         const out = el('span', { className: 'val' }, '-');
@@ -234,7 +286,10 @@
     function format(name, v, unit) {
       if (v === null || v === undefined) return 'none yet';
       if (name === 'lastMotion') return new Date(v).toLocaleTimeString();
-      if (typeof v === 'number') return (Number.isInteger(v) ? v : v.toFixed(1)) + unit;
+      if (typeof v === 'number') {
+        if (DECIMALS[name] !== undefined) return v.toFixed(DECIMALS[name]) + unit;
+        return (Number.isInteger(v) ? v : v.toFixed(1)) + unit;
+      }
       return String(v);
     }
 
@@ -269,7 +324,7 @@
 
       source.addEventListener('thing', e => {
         const ev = JSON.parse(e.data); // { thingId, type, data, timestamp }
-        const tick = ev.thingId === 'thermostat' && ev.type === 'propertyChanged' && ev.data.property === 'temperature';
+        const tick = ev.type === 'propertyChanged' && (TICKS[ev.thingId] || []).includes(ev.data.property);
         if (!(tick && $('hide-ticks').checked)) log('thing', e.data);
         const card = cards.get(ev.thingId);
         if (!card) return;
@@ -283,6 +338,13 @@
         } else if (ev.type === 'targetReached') {
           card.pulse();
           card.badge('target reached (' + ev.data.target + ' °C)');
+        } else if (ev.type === 'breakerToggled') {
+          // payload not specified by the model: accept { live } or { value }, otherwise just notify
+          const d = ev.data || {};
+          const live = typeof d.live === 'boolean' ? d.live : typeof d.value === 'boolean' ? d.value : undefined;
+          if (live !== undefined) card.set('live', live);
+          card.pulse();
+          card.badge(live === undefined ? 'breaker toggled' : live ? 'power restored' : 'power cut off');
         }
       });
 

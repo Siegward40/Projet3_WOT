@@ -11,6 +11,7 @@ $services = @(
     @{ Name = 'lamp';    Jar = 'thing-lamp\target\thing-lamp.jar' }
     @{ Name = 'thermostat';    Jar = 'thing-thermostat\target\thing-thermostat.jar' }
     @{ Name = 'motion';    Jar = 'thing-motion\target\thing-motion.jar' }
+    @{ Name = 'meter-circuit-breaker';    Jar = 'thing-meter-circuit-breaker\target\thing-meter-circuit-breaker.jar' }
 )
 $ids = foreach ($s in $services) {
     $p = Start-Process java -ArgumentList '-jar', $s.Jar -PassThru -WindowStyle Hidden `
