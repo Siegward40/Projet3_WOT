@@ -64,7 +64,10 @@ public class ThermostatController {
             return error(HttpStatus.NOT_FOUND, "unknown property " + name);
         }
         Object value = body.get("value");
-        if ("temperature".equals(name) || "target".equals(name)) {
+        if ("temperature".equals(name)) {
+            return error(HttpStatus.BAD_REQUEST, "property temperature is read-only");
+        }
+        if ("target".equals(name)) {
             if (!(value instanceof Number)) {
                 return error(HttpStatus.BAD_REQUEST, "property"+name+"expects a numeric value");
             }
@@ -80,9 +83,9 @@ public class ThermostatController {
 
     @PostMapping("/actions/setTarget")
     public ResponseEntity<Map<String, Object>> setTarget(@RequestBody Map<String, Object> body) {
-        Object value = body.get("target");
+        Object value = body.containsKey("value") ? body.get("value") : body.get("target");
         if (!(value instanceof Number)) {
-            return error(HttpStatus.BAD_REQUEST,"action setTarget expects numeric value");
+            return error(HttpStatus.BAD_REQUEST,"action setTarget expects {\"value\": number}");
         }
         float target = ((Number) value).floatValue();
         // TODO maybe later : limit target
