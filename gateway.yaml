@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: Gateway
+  version: 1.0.0
+servers: [{url: 'http://localhost:8080'}]
+security: [{bearer: []}]
+paths:
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ThingSummary'
+        '401':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: registerThing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Thing'
+      responses:
+        '201':
+          description: Created,
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /things/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thing'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unregisterThing
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /things/{id}/properties:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get:
+      operationId: readProperties
+      responses:
+        '200':
+          description: OK,
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /things/{id}/properties/{name}:
+    parameters: [{$ref: '#/components/parameters/id'}, {$ref: '#/components/parameters/name'}]
+    get:
+      operationId: readProperty
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: writeProperty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Value'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /things/{id}/actions/{name}:
+    parameters: [{$ref: '#/components/parameters/id'}, {$ref: '#/components/parameters/name'}]
+    post:
+      operationId: invokeAction
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Value'}}}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /events:
+    post:
+      operationId: sendEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThingEvent'
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /events/stream:
+    get:
+      operationId: streamEvents
+      security: [{bearer: []}, {tokenQuery: []}]
+      responses:
+        '200':
+          description: Server-Sent Events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+    tokenQuery:
+      type: apiKey
+      in: query
+      name: token
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    name:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Thing:
+      type: object
+      required: [id, baseUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        baseUrl:
+          type: string
+        model:
+          type: object
+    ThingSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        links:
+          type: object
+          additionalProperties:
+            type: string
+    Value:
+      type: object
+      properties:
+        value: {}
+    Property:
+      type: object
+      properties:
+        name:
+          type: string
+        value: {}
+    ThingEvent:
+      type: object
+      required: [thingId, type]
+      properties:
+        thingId:
+          type: string
+        type:
+          type: string
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
