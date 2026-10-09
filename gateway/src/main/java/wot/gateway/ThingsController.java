@@ -5,6 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,6 +15,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Registry of the things (in memory). */
 @RestController
@@ -21,12 +27,18 @@ public class ThingsController {
     public record Thing(String id, String name, String baseUrl, Map<String, Object> model) {
     }
 
+    private static final String MANUAL_SOURCE = "dashboard-manual";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(ThingsController.class);
+
     private final Map<String, Thing> things = new ConcurrentHashMap<>();
     private final EventHub hub;
+    private final RulesState state;
     private final RestClient http = RestClient.create();
 
-    public ThingsController(EventHub hub) {
+    public ThingsController(EventHub hub, RulesState state) {
         this.hub = hub;
+        this.state = state;
     }
 
     @PostMapping
@@ -82,22 +94,44 @@ public class ThingsController {
     }
 
     @PutMapping("/{id}/properties/{name}")
-    public ResponseEntity<String> writeProperty(@PathVariable String id, @PathVariable String name,
-                                                @RequestBody(required = false) String body) {
+    public ResponseEntity<String> putProperty(@PathVariable String id, @PathVariable String name,
+                                              @RequestBody(required = false) String body,
+                                              @RequestHeader(value = "X-Source", required = false) String source) {
+        ResponseEntity<String> response = writeProperty(id, name, body);
+        if (MANUAL_SOURCE.equals(source) && response.getStatusCode().is2xxSuccessful()) {
+            markManual(id, name, body);
+        }
+        return response;
+    }
+
+    public ResponseEntity<String> writeProperty(String id, String name, String body) {
         return call(id, HttpMethod.PUT, "/properties/" + name, body);
     }
+
     @PostMapping("/{id}/actions/{name}")
     public ResponseEntity<String> invokeAction(@PathVariable String id, @PathVariable String name,
                                                @RequestBody(required = false) String body) {
         return call(id, HttpMethod.POST, "/actions/" + name, body);
     }
 
-    // TODO (R4, bonus): POST /things/{id}/automation/resume
+    private void markManual(String id, String name, String body) {
+        try {
+            JsonNode value = MAPPER.readTree(body).get("value");
+            if (value == null) return;
 
-    /**
-     * Forwards the request to the thing and returns its answer unchanged (status code and JSON body),
-     * so that the thing's 200/400/404 reach the client. If the thing cannot be reached: 502.
-     */
+            if ("lamp".equals(id) && "on".equals(name)) {
+                boolean on = value.asBoolean();
+                state.setLampManual(on);
+                state.setLampOnByR1(false);
+            }
+            if ("thermostat".equals(id) && "mode".equals(name)) {
+                state.setThermostatManual(!"off".equals(value.asText()));
+            }
+        } catch (Exception e) {
+            log.warn("Could not read manual write {}/{}: {}", id, name, e.getMessage());
+        }
+    }
+
     private ResponseEntity<String> call(String id, HttpMethod method, String path, String body) {
         Thing thing = find(id);
         try {
