@@ -80,9 +80,9 @@ public class LampController {
     
     @PostMapping("/actions/setBrightness")
     public ResponseEntity<Map<String, Object>> setBrightness(@RequestBody Map<String, Object> body) {
-        Object value = body.get("brightness");
+        Object value = body.containsKey("value") ? body.get("value") : body.get("brightness");
         if (!(value instanceof Number)) {
-            return error(HttpStatus.BAD_REQUEST,"action setBrightness expects {\"brightness\": 0..100}");
+            return error(HttpStatus.BAD_REQUEST,"action setBrightness expects {\"value\": 0..100}");
         }
         int brightness = ((Number) value).intValue();
         if (brightness < 0 || brightness > 100) {

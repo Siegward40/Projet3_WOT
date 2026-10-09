@@ -10,6 +10,7 @@ spring:
 gateway:
   # Authorization: Bearer <token> on /things/** and /events/**
   token: operator-secret
+  viewer-token: viewer-secret
 
 rules:
   t1-ms: 10000
