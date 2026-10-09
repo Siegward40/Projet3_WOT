@@ -331,6 +331,12 @@
         if (!(tick && $('hide-ticks').checked)) log('thing', e.data);
         const card = cards.get(ev.thingId);
         if (!card) return;
+        if (ev.type === 'liveness') {
+          const up = ev.data.alive === true;
+          card.setOffline(!up, 'no answer to the liveness check');
+          if (up) refreshThing(ev.thingId).catch(err => showError(err)); // back online: resync the values
+          return;
+        }
         card.touch(ev.timestamp);
         if (ev.type === 'propertyChanged') {
           card.set(ev.data.property, ev.data.value);

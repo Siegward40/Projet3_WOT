@@ -2,6 +2,7 @@ package wot.gateway;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,6 +13,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -35,6 +38,18 @@ public class ThingsController {
     private final EventHub hub;
     private final RulesState state;
     private final RestClient http = RestClient.create();
+
+    /** Last known liveness of each thing (true = answers). */
+    private final Map<String, Boolean> alive = new ConcurrentHashMap<>();
+    /** Dedicated client with short timeouts, so a frozen thing cannot block the liveness check. */
+    private final RestClient probe = RestClient.builder().requestFactory(timeouts()).build();
+
+    private static SimpleClientHttpRequestFactory timeouts() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(2000);
+        return factory;
+    }
 
     public ThingsController(EventHub hub, RulesState state) {
         this.hub = hub;
@@ -93,6 +108,10 @@ public class ThingsController {
         return call(id, HttpMethod.GET, "/properties/" + name, null);
     }
 
+    /**
+     * HTTP endpoint (dashboard / external clients). Reads X-Source to know whether the write
+     * was done by hand from the dashboard.
+     */
     @PutMapping("/{id}/properties/{name}")
     public ResponseEntity<String> putProperty(@PathVariable String id, @PathVariable String name,
                                               @RequestBody(required = false) String body,
@@ -104,6 +123,10 @@ public class ThingsController {
         return response;
     }
 
+    /**
+     * Plain write, used internally by the rules (EventsController) : never counted as manual.
+     * Not mapped to any URL.
+     */
     public ResponseEntity<String> writeProperty(String id, String name, String body) {
         return call(id, HttpMethod.PUT, "/properties/" + name, body);
     }
@@ -114,6 +137,36 @@ public class ThingsController {
         return call(id, HttpMethod.POST, "/actions/" + name, body);
     }
 
+    /**
+     * Every 10 s (rules.liveness-ms), asks each thing whether it answers.
+     * A 'liveness' event is broadcast only when the status changes (and the first time).
+     */
+    @Scheduled(fixedDelayString = "${liveness.interval-ms:10000}")
+    public void checkLiveness() {
+        for (Thing thing : things.values()) {
+            boolean ok;
+            try {
+                // any 2xx answer means the thing is alive
+                probe.get().uri(thing.baseUrl() + "/properties").retrieve().toBodilessEntity();
+                ok = true;
+            } catch (Exception e) {
+                ok = false;
+            }
+            Boolean previous = alive.put(thing.id(), ok);
+            if (previous == null || previous != ok) {
+                log.info("Thing {} is now {}", thing.id(), ok ? "alive" : "unreachable");
+            }
+            // broadcast at every check, so the dashboard sees a heartbeat every cycle
+            hub.broadcast("thing", Map.of(
+                    "thingId", thing.id(),
+                    "type", "liveness",
+                    "data", Map.of("alive", ok),
+                    "timestamp", Instant.now().toString()));
+        }
+        alive.keySet().retainAll(things.keySet()); // forget unregistered things
+    }
+
+    /** Records which properties were set by hand, so that the rules leave them alone. */
     private void markManual(String id, String name, String body) {
         try {
             JsonNode value = MAPPER.readTree(body).get("value");
@@ -121,10 +174,11 @@ public class ThingsController {
 
             if ("lamp".equals(id) && "on".equals(name)) {
                 boolean on = value.asBoolean();
-                state.setLampManual(on);
+                state.setLampManual(on);   // ON by hand : out of the T1 timer ; OFF by hand : rules take over again
                 state.setLampOnByR1(false);
             }
             if ("thermostat".equals(id) && "mode".equals(name)) {
+                // a mode chosen by hand (heat/eco) is kept ; "off" gives control back to the rules
                 state.setThermostatManual(!"off".equals(value.asText()));
             }
         } catch (Exception e) {
