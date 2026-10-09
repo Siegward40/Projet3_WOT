@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class MeterCircuitBreakerController {
 
-	private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("live", true, "energyConsumed", 0.0, "instConsumption", 0.0));
+	private final Map<String, Object> state = new ConcurrentHashMap<>(Map.of("live", true, "energyConsumed", (float)0, "instConsumption", (float)0));
     private final GatewayClient gateway;
 
     public MeterCircuitBreakerController(GatewayClient gateway) {
@@ -66,6 +66,7 @@ public class MeterCircuitBreakerController {
     @PostMapping("/actions/toggle")
     public Map<String, Object> toggle() {
         set("live", !(Boolean) state.get("live"));
+        gateway.emit("breakerToggled", state);
         return Map.of("action", "toggle", "status", "completed", "properties", state);
     }
 
@@ -90,7 +91,10 @@ public class MeterCircuitBreakerController {
     
     @Scheduled(fixedDelay = 1000)
     public void measureConsumption() {
-        if(!(boolean) state.get("live")) return;
+        if(!(boolean) state.get("live")) {
+        	set("instConsumption", 0);
+        	return;
+        }
         
         float instConsumption = 0;
         
@@ -107,7 +111,7 @@ public class MeterCircuitBreakerController {
         	else if(thermostat_mode.equals("eco")) instConsumption += power_eco_mode;
         }
         
-        float energyConsumed = (float) state.get("live") + instConsumption;
+        float energyConsumed = (float) state.get("energyConsumed") + instConsumption;
         
         set("instConsumption", instConsumption);
         set("energyConsumed", energyConsumed);

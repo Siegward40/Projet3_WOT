@@ -37,6 +37,7 @@ public class EventsController {
     private static final Logger log = LoggerFactory.getLogger(EventsController.class);
 
     private volatile boolean lampOnByR1 = false;
+    private boolean circuit_live = true;
 
     public EventsController(EventHub hub, ThingsController things) {
         this.hub = hub;
@@ -55,27 +56,36 @@ public class EventsController {
         }
         things.find(event.thingId()); // 404 if unknown
         hub.broadcast("thing", event);
+        // Priority to circuit breaker
+        if("breakerToggled".equals(event.type())) {
+        	circuit_live = (boolean) event.data.get("live");
+        	if(!circuit_live) {
+        		things.writeProperty("lamp", "on", "{\"value\":false}");
+        		things.writeProperty("thermostat", "mode", "{\"value\":\"off\"}");
+        	}
+        }
         // R1 and R2
         if("motion".equals(event.type())){
-            ResponseEntity<String> respEnt = things.readProperty("thermostat", "temperature");
-            float temp;
-            try {
-                temp = MAPPER.readTree(respEnt.getBody()).get("value").floatValue();
-            } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Réponse thermostat invalide", e);
-            }
-            things.writeProperty("lamp", "on", "{\"value\":true}");
-            lampOnByR1 = true;
-            if(temp < 19.0){
-                things.writeProperty("thermostat", "target", "{\"value\":19.0}");
-                things.writeProperty("thermostat", "mode", "{\"value\":\"heat\"}");
-            }
+        	if(circuit_live) {
+	            ResponseEntity<String> respEnt = things.readProperty("thermostat", "temperature");
+	            float temp;
+	            try {
+	                temp = MAPPER.readTree(respEnt.getBody()).get("value").floatValue();
+	            } catch (JsonProcessingException e) {
+	                throw new IllegalStateException("Réponse thermostat invalide", e);
+	            }
+	            things.writeProperty("lamp", "on", "{\"value\":true}");
+	            lampOnByR1 = true;
+	            if(temp < 19.0){
+	                things.writeProperty("thermostat", "target", "{\"value\":19.0}");
+	                things.writeProperty("thermostat", "mode", "{\"value\":\"heat\"}");
+	            }
+        	}
         }
         // R2 - end
         if("targetReached".equals(event.type())){
             things.writeProperty("thermostat", "mode", "{\"value\":\"off\"}");
         }
-        // TODO: rules R3, R4
         return ResponseEntity.accepted().build();
     }
 
@@ -95,11 +105,12 @@ public class EventsController {
 
     @Scheduled(fixedDelay = 1000)
     public void checkTimers() {
+    	if(!circuit_live || !lampOnByR1) return;
         try {
-            if (!lampOnByR1) return;
             Instant lastMotion = readLastMotion();
             // au bout de T1, on eteint la lampe si pas de motion depuis
             if (lastMotion != null
+            		&& lampOnByR1
                     && Duration.between(lastMotion, Instant.now()).toMillis() >= t1Ms) {
                 things.writeProperty("lamp", "on", "{\"value\":false}");
                 lampOnByR1 = false;
@@ -116,7 +127,7 @@ public class EventsController {
                         // TODO : implémenter logique T4
             }
         } catch (Exception e) {
-            log.warn("R1 check failed: {}", e.getMessage());
+            log.warn("Rule check failed: {}", e.getMessage());
         }
     }
 }

@@ -25,7 +25,9 @@ public final class MeterCircuitBreakerDescription {
                 "toggle", Map.of("description", "Cut or restore power to all devices")
         ));
         model.put("events", Map.of(
-                "propertyChanged", Map.of("description", "a property changed: {\"property\": ..., \"value\": ...}")));
+        		"breakerToggled", Map.of("description", "the power was cut off or restored"),
+                "propertyChanged", Map.of("description", "a property changed: {\"property\": ..., \"value\": ...}")
+        ));
         model.put("links", Map.of(
                 "self", "/model",
                 "properties", "/properties",
