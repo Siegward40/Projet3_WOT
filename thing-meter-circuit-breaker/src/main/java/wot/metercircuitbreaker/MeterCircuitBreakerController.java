@@ -102,7 +102,10 @@ public class MeterCircuitBreakerController {
         
         // Check property 'on' of lamp
         Object lamp_on = gateway.getProperty("lamp", "on");
-        if(lamp_on != null && (boolean)lamp_on) instConsumption += power_lamp;
+        Object lamp_br = gateway.getProperty("lamp", "brightness");
+        if(lamp_on != null && (boolean)lamp_on && lamp_br != null) {
+        	instConsumption += power_lamp*((int)lamp_br/100.0);
+        }
 
         // Check property 'mode' of thermostat
         Object thermostat_mode = gateway.getProperty("thermostat", "mode");
