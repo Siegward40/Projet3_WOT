@@ -54,4 +54,6 @@ curl -X PUT -H "Content-Type: application/json" -d '{"value":true}' http://local
 - Demo video
 - Installation guide (README)
 
-See more: [report](...)
+## See more
+- [report](WoT - Project 3 Report.pdf)
+- [demo video](https://www.youtube.com/watch?v=s5oXix25XVY)
